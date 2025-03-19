@@ -1,0 +1,76 @@
+#include "lrun.h"
+#include "web_api.h"
+#include "CommonFunctions.h"
+#include "OktaAuthentication.h"
+
+Action()
+{
+    int rc;
+    char query_param[100];
+    
+    // Test associatesearch endpoint with name search
+    lr_start_transaction("API_AssociateSearchByName");
+    
+    // Get an Okta token
+    if (add_auth_header() != LR_PASS) {
+        lr_error_message("Failed to add authentication header");
+        lr_end_transaction("API_AssociateSearchByName", LR_FAIL);
+        return LR_FAIL;
+    }
+    
+    // Format query parameters (first and last name)
+    sprintf(query_param, "firstName=%s&lastName=%s", 
+            lr_eval_string("{portfolio_manager_first}"), 
+            lr_eval_string("{portfolio_manager_last}"));
+    
+    // Set up URL for GET request
+    rc = web_url("AssociateSearchByName",
+        "URL={api_base_url}/v1/api/associatesearch?{query_param}",
+        "Method=GET",
+        "RecContentType=application/json",
+        "Snapshot=t3.inf",
+        LAST);
+    
+    // Check for valid response status
+    web_get_int_property(HTTP_INFO_RETURN_CODE, &rc);
+    if (rc != 200) {
+        lr_error_message("Associate Search API returned unexpected status code: %d", rc);
+        lr_end_transaction("API_AssociateSearchByName", LR_FAIL);
+    } else {
+        lr_output_message("Associate Search API returned status code: %d", rc);
+        lr_end_transaction("API_AssociateSearchByName", LR_PASS);
+    }
+    
+    // Test associatesearch endpoint with job title search
+    lr_start_transaction("API_AssociateSearchByJobTitle");
+    
+    // Get a fresh Okta token
+    if (add_auth_header() != LR_PASS) {
+        lr_error_message("Failed to add authentication header");
+        lr_end_transaction("API_AssociateSearchByJobTitle", LR_FAIL);
+        return LR_FAIL;
+    }
+    
+    // Set job title parameter
+    lr_save_string("Portfolio Manager", "job_title");
+    
+    // Set up URL for GET request
+    rc = web_url("AssociateSearchByJobTitle",
+        "URL={api_base_url}/v1/api/associatesearch?jobTitle={job_title}",
+        "Method=GET",
+        "RecContentType=application/json",
+        "Snapshot=t4.inf",
+        LAST);
+    
+    // Check for valid response status
+    web_get_int_property(HTTP_INFO_RETURN_CODE, &rc);
+    if (rc != 200) {
+        lr_error_message("Associate Search by Job Title API returned unexpected status code: %d", rc);
+        lr_end_transaction("API_AssociateSearchByJobTitle", LR_FAIL);
+    } else {
+        lr_output_message("Associate Search by Job Title API returned status code: %d", rc);
+        lr_end_transaction("API_AssociateSearchByJobTitle", LR_PASS);
+    }
+    
+    return 0;
+}

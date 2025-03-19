@@ -1,0 +1,163 @@
+#include "lrun.h"
+#include "web_api.h"
+#include "CommonFunctions.h"
+#include "OktaAuthentication.h"
+
+Action()
+{
+    // Initialize Okta token
+    obtain_okta_token();
+    
+    // Load React application
+    load_react_app();
+    
+    // Generate random data for trade plan
+    generate_trade_plan_data();
+    
+    lr_start_transaction("T02_NavigateToTradePlans");
+    
+    // Click on Trade Plans menu/link
+    web_js_run(
+        "Code=document.querySelector('a[href*=\"trade-plans\"]').click();",
+        "ResultParam=clickResult",
+        LAST);
+    
+    wait_for_ajax_completion();
+    
+    lr_end_transaction("T02_NavigateToTradePlans", LR_AUTO);
+    
+    lr_start_transaction("T03_ClickNewTradePlan");
+    
+    // Click "New Trade Plan" button
+    web_js_run(
+        "Code=document.querySelector('button:contains(\"New Trade Plan\")').click();",
+        "ResultParam=clickResult",
+        LAST);
+    
+    wait_for_ajax_completion();
+    
+    lr_end_transaction("T03_ClickNewTradePlan", LR_AUTO);
+    
+    lr_start_transaction("T04_FillTradePlanForm");
+    
+    // Fill Portfolio Manager
+    web_js_run(
+        "Code=document.querySelector('input[name=\"portfolioManager\"]').value = arguments[0] + ' ' + arguments[1];"
+        "arguments[2].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={portfolio_manager_first}",
+        "SecondParam={portfolio_manager_last}",
+        "ThirdParam=document.querySelector('input[name=\"portfolioManager\"]')",
+        LAST);
+    
+    // Fill Client Name
+    web_js_run(
+        "Code=document.querySelector('input[name=\"clientName\"]').value = arguments[0] + ' ' + arguments[1] + '-' + arguments[2];"
+        "arguments[3].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={client_first_name}",
+        "SecondParam={client_last_name}",
+        "ThirdParam={client_suffix}",
+        "FourthParam=document.querySelector('input[name=\"clientName\"]')",
+        LAST);
+    
+    // Fill Account Number
+    web_js_run(
+        "Code=document.querySelector('input[name=\"accountNumber\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={account_number}",
+        "SecondParam=document.querySelector('input[name=\"accountNumber\"]')",
+        LAST);
+    
+    // Fill Start Date
+    web_js_run(
+        "Code=document.querySelector('input[name=\"startDate\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={start_date}",
+        "SecondParam=document.querySelector('input[name=\"startDate\"]')",
+        LAST);
+    
+    // Fill End Date
+    web_js_run(
+        "Code=document.querySelector('input[name=\"endDate\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={end_date}",
+        "SecondParam=document.querySelector('input[name=\"endDate\"]')",
+        LAST);
+    
+    // Fill Security Name
+    web_js_run(
+        "Code=document.querySelector('input[name=\"securityName\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={security_name}",
+        "SecondParam=document.querySelector('input[name=\"securityName\"]')",
+        LAST);
+    
+    // Select Currency Type (dollars or shares)
+    web_js_run(
+        "Code=const select = document.querySelector('select[name=\"currencyType\"]');"
+        "select.value = arguments[0];"
+        "select.dispatchEvent(new Event('change', { bubbles: true }));",
+        "ResultParam=selectResult",
+        SOURCES,
+        "FirstParam={currency_type}",
+        LAST);
+    
+    // Fill Trade Amount
+    web_js_run(
+        "Code=document.querySelector('input[name=\"tradeAmount\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam={trade_amount}",
+        "SecondParam=document.querySelector('input[name=\"tradeAmount\"]')",
+        LAST);
+    
+    // Select Trade Frequency
+    web_js_run(
+        "Code=const select = document.querySelector('select[name=\"tradeFrequency\"]');"
+        "select.value = arguments[0];"
+        "select.dispatchEvent(new Event('change', { bubbles: true }));",
+        "ResultParam=selectResult",
+        SOURCES,
+        "FirstParam={trade_frequency}",
+        LAST);
+    
+    lr_end_transaction("T04_FillTradePlanForm", LR_AUTO);
+    
+    lr_start_transaction("T05_SubmitTradePlan");
+    
+    // Click Submit button
+    web_js_run(
+        "Code=document.querySelector('button[type=\"submit\"]').click();",
+        "ResultParam=clickResult",
+        LAST);
+    
+    wait_for_ajax_completion();
+    
+    // Verify success message or redirect
+    web_js_run(
+        "Code=return document.querySelector('.success-message') !== null || window.location.href.includes('/trade-plans');",
+        "ResultParam=submitSuccess",
+        LAST);
+    
+    if (strcmp(lr_eval_string("{submitSuccess}"), "true") != 0) {
+        lr_error_message("Trade plan submission failed");
+        lr_end_transaction("T05_SubmitTradePlan", LR_FAIL);
+    } else {
+        lr_output_message("Trade plan submitted successfully");
+        lr_end_transaction("T05_SubmitTradePlan", LR_PASS);
+    }
+    
+    return 0;
+}

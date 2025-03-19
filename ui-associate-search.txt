@@ -1,0 +1,78 @@
+#include "lrun.h"
+#include "web_api.h"
+#include "CommonFunctions.h"
+#include "OktaAuthentication.h"
+
+Action()
+{
+    char first_name[20];
+    char last_name[20];
+    
+    // Initialize Okta token
+    obtain_okta_token();
+    
+    // Load React application
+    load_react_app();
+    
+    // Generate random name for search
+    strcpy(first_name, lr_eval_string("{portfolio_manager_first}"));
+    strcpy(last_name, lr_eval_string("{portfolio_manager_last}"));
+    
+    lr_start_transaction("T02_NavigateToAssociateSearch");
+    
+    // Click on Associate Search menu/link
+    web_js_run(
+        "Code=document.querySelector('a[href*=\"associate-search\"]').click();",
+        "ResultParam=clickResult",
+        LAST);
+    
+    wait_for_ajax_completion();
+    
+    lr_end_transaction("T02_NavigateToAssociateSearch", LR_AUTO);
+    
+    lr_start_transaction("T03_PerformAssociateSearch");
+    
+    // Enter first name in search field
+    web_js_run(
+        "Code=document.querySelector('input[name=\"firstName\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam=" + first_name,
+        "SecondParam=document.querySelector('input[name=\"firstName\"]')",
+        LAST);
+    
+    // Enter last name in search field
+    web_js_run(
+        "Code=document.querySelector('input[name=\"lastName\"]').value = arguments[0];"
+        "arguments[1].dispatchEvent(new Event('input', { bubbles: true }));",
+        "ResultParam=inputResult",
+        SOURCES,
+        "FirstParam=" + last_name,
+        "SecondParam=document.querySelector('input[name=\"lastName\"]')",
+        LAST);
+    
+    // Click search button
+    web_js_run(
+        "Code=document.querySelector('button[type=\"submit\"]').click();",
+        "ResultParam=clickResult",
+        LAST);
+    
+    wait_for_ajax_completion();
+    
+    // Verify search results appeared
+    web_js_run(
+        "Code=return document.querySelectorAll('.search-results-container').length > 0;",
+        "ResultParam=resultsExist",
+        LAST);
+    
+    if (strcmp(lr_eval_string("{resultsExist}"), "1") != 0) {
+        lr_error_message("Associate search results not found");
+        lr_end_transaction("T03_PerformAssociateSearch", LR_FAIL);
+    } else {
+        lr_output_message("Associate search results found");
+        lr_end_transaction("T03_PerformAssociateSearch", LR_PASS);
+    }
+    
+    return 0;
+}

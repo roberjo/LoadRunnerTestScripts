@@ -1,0 +1,108 @@
+#include "lrun.h"
+#include "web_api.h"
+#include "CommonFunctions.h"
+#include "OktaAuthentication.h"
+
+Action()
+{
+    int rc;
+    char plan_id[20];
+    char request_body[1024];
+    
+    // Initialize random data for plan
+    generate_trade_plan_data();
+    
+    // First test GET /v1/api/itr/plan endpoint
+    lr_start_transaction("API_GetPlan");
+    
+    // Get an Okta token
+    if (add_auth_header() != LR_PASS) {
+        lr_error_message("Failed to add authentication header");
+        lr_end_transaction("API_GetPlan", LR_FAIL);
+        return LR_FAIL;
+    }
+    
+    // Generate random plan ID for search
+    sprintf(plan_id, "PLAN-%d", 10000 + (lr_rand() % 90000));
+    
+    // Set up URL for GET request
+    rc = web_url("GetPlan",
+        "URL={api_base_url}/v1/api/itr/plan?planId={plan_id}",
+        "Method=GET",
+        "RecContentType=application/json",
+        "Snapshot=t1.inf",
+        LAST);
+    
+    // Check for valid response status (200 OK or 404 Not Found are both acceptable for the test)
+    web_get_int_property(HTTP_INFO_RETURN_CODE, &rc);
+    if (rc != 200 && rc != 404) {
+        lr_error_message("GET Plan API returned unexpected status code: %d", rc);
+        lr_end_transaction("API_GetPlan", LR_FAIL);
+    } else {
+        lr_output_message("GET Plan API returned status code: %d", rc);
+        lr_end_transaction("API_GetPlan", LR_PASS);
+    }
+    
+    // Now test POST /v1/api/itr/plan endpoint to create a plan
+    lr_start_transaction("API_CreatePlan");
+    
+    // Get a fresh Okta token
+    if (add_auth_header() != LR_PASS) {
+        lr_error_message("Failed to add authentication header");
+        lr_end_transaction("API_CreatePlan", LR_FAIL);
+        return LR_FAIL;
+    }
+    
+    // Create JSON request body
+    sprintf(request_body, 
+        "{"
+        "\"portfolioManager\":\"%s %s\","
+        "\"clientName\":\"%s %s-%s\","
+        "\"accountNumber\":%s,"
+        "\"startDate\":\"%s\","
+        "\"endDate\":\"%s\","
+        "\"securityName\":\"%s\","
+        "\"currencyType\":\"%s\","
+        "\"tradeAmount\":%s,"
+        "\"tradeFrequency\":\"%s\""
+        "}",
+        lr_eval_string("{portfolio_manager_first}"), lr_eval_string("{portfolio_manager_last}"),
+        lr_eval_string("{client_first_name}"), lr_eval_string("{client_last_name}"), lr_eval_string("{client_suffix}"),
+        lr_eval_string("{account_number}"),
+        lr_eval_string("{start_date}"),
+        lr_eval_string("{end_date}"),
+        lr_eval_string("{security_name}"),
+        lr_eval_string("{currency_type}"),
+        lr_eval_string("{trade_amount}"),
+        lr_eval_string("{trade_frequency}"));
+    
+    // Add content type header
+    web_add_header("Content-Type", "application/json");
+    
+    // Send POST request
+    rc = web_custom_request("CreatePlan",
+        "URL={api_base_url}/v1/api/itr/plan",
+        "Method=POST",
+        "RecContentType=application/json",
+        "Body={request_body}",
+        "Snapshot=t2.inf",
+        LAST);
+    
+    // Check for valid response status (expect 201 Created)
+    web_get_int_property(HTTP_INFO_RETURN_CODE, &rc);
+    if (rc != 201) {
+        lr_error_message("POST Plan API returned unexpected status code: %d", rc);
+        lr_end_transaction("API_CreatePlan", LR_FAIL);
+    } else {
+        // Save created plan ID
+        web_reg_save_param_json("ParamName=created_plan_id", 
+                               "QueryString=$.planId",
+                               "NotFound=Warning",
+                               LAST);
+        
+        lr_output_message("Successfully created plan with ID: %s", lr_eval_string("{created_plan_id}"));
+        lr_end_transaction("API_CreatePlan", LR_PASS);
+    }
+    
+    return 0;
+}

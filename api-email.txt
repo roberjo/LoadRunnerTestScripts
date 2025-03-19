@@ -1,0 +1,83 @@
+#include "lrun.h"
+#include "web_api.h"
+#include "CommonFunctions.h"
+#include "OktaAuthentication.h"
+
+Action()
+{
+    int rc;
+    char request_body[2048];
+    char subject[100];
+    char email_body[1024];
+    
+    // Test email endpoint
+    lr_start_transaction("API_SendEmail");
+    
+    // Get an Okta token
+    if (add_auth_header() != LR_PASS) {
+        lr_error_message("Failed to add authentication header");
+        lr_end_transaction("API_SendEmail", LR_FAIL);
+        return LR_FAIL;
+    }
+    
+    // Generate random subject and body
+    sprintf(subject, "Trade Plan Update for %s %s-%s", 
+            lr_eval_string("{client_first_name}"), 
+            lr_eval_string("{client_last_name}"),
+            lr_eval_string("{client_suffix}"));
+    
+    sprintf(email_body, 
+            "Dear Team,\n\n"
+            "A new trade plan has been created for client %s %s-%s with account number %s.\n"
+            "The plan involves trading %s with a %s amount of %s, on a %s basis "
+            "from %s to %s.\n\n"
+            "Please review and approve at your earliest convenience.\n\n"
+            "Regards,\n%s %s\n",
+            lr_eval_string("{client_first_name}"), 
+            lr_eval_string("{client_last_name}"),
+            lr_eval_string("{client_suffix}"),
+            lr_eval_string("{account_number}"),
+            lr_eval_string("{security_name}"),
+            lr_eval_string("{currency_type}"),
+            lr_eval_string("{trade_amount}"),
+            lr_eval_string("{trade_frequency}"),
+            lr_eval_string("{start_date}"),
+            lr_eval_string("{end_date}"),
+            lr_eval_string("{portfolio_manager_first}"), 
+            lr_eval_string("{portfolio_manager_last}"));
+    
+    // Create JSON request body
+    sprintf(request_body, 
+        "{"
+        "\"to\":\"team@example.com\","
+        "\"cc\":\"manager@example.com\","
+        "\"subject\":\"%s\","
+        "\"body\":\"%s\""
+        "}",
+        subject,
+        email_body);
+    
+    // Add content type header
+    web_add_header("Content-Type", "application/json");
+    
+    // Send POST request
+    rc = web_custom_request("SendEmail",
+        "URL={api_base_url}/v1/api/email",
+        "Method=POST",
+        "RecContentType=application/json",
+        "Body={request_body}",
+        "Snapshot=t5.inf",
+        LAST);
+    
+    // Check for valid response status
+    web_get_int_property(HTTP_INFO_RETURN_CODE, &rc);
+    if (rc != 200 && rc != 201) {
+        lr_error_message("Email API returned unexpected status code: %d", rc);
+        lr_end_transaction("API_SendEmail", LR_FAIL);
+    } else {
+        lr_output_message("Email sent successfully");
+        lr_end_transaction("API_SendEmail", LR_PASS);
+    }
+    
+    return 0;
+}
